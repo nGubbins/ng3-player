@@ -4,6 +4,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:metadata_god/metadata_god.dart';
 import 'package:path/path.dart' as p;
+import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/track.dart';
@@ -53,16 +54,67 @@ class LibraryProvider extends ChangeNotifier {
   Future<void> _init() async {
     final prefs = await SharedPreferences.getInstance();
     final saved = prefs.getString('library_path');
-    if (saved != null && Directory(saved).existsSync()) {
-      await loadLibrary(saved);
+    if (saved == null) return;
+
+    final resolved = _resolveAndroidPath(saved);
+    try {
+      if (Directory(resolved).existsSync()) {
+        await loadLibrary(resolved);
+      }
+    } catch (_) {
+      // Saved path from a prior version may be invalid; user must re-pick.
     }
   }
 
   Future<void> pickAndLoad() async {
+    if (Platform.isAndroid) {
+      final granted = await _requestAndroidAudioPermission();
+      if (!granted) {
+        _error = 'Storage permission denied. Please grant it in app settings.';
+        notifyListeners();
+        return;
+      }
+    }
+
     final path = await FilePicker.platform.getDirectoryPath(
       dialogTitle: 'Select Music Library Folder',
     );
-    if (path != null) await loadLibrary(path);
+    if (path == null) return;
+
+    await loadLibrary(_resolveAndroidPath(path));
+  }
+
+  // Requests audio/storage permission on Android and returns whether access was granted.
+  Future<bool> _requestAndroidAudioPermission() async {
+    if (await Permission.audio.isGranted) return true;
+    if (await Permission.storage.isGranted) return true;
+
+    var status = await Permission.audio.request();
+    if (status.isGranted) return true;
+
+    status = await Permission.storage.request();
+    return status.isGranted;
+  }
+
+  // Converts Android SAF content URIs to real file-system paths.
+  // content://com.android.externalstorage.documents/tree/primary%3AMusic
+  // → /storage/emulated/0/Music
+  String _resolveAndroidPath(String path) {
+    if (!Platform.isAndroid) return path;
+    if (!path.startsWith('content://com.android.externalstorage.documents')) {
+      return path;
+    }
+    try {
+      final decoded = Uri.decodeFull(path);
+      final match = RegExp(r'/tree/([^:/]+):(.*)$').firstMatch(decoded);
+      if (match == null) return path;
+      final storage = match.group(1)!;
+      final relative = match.group(2)!;
+      final base = storage == 'primary' ? '/storage/emulated/0' : '/storage/$storage';
+      return relative.isEmpty ? base : '$base/$relative';
+    } catch (_) {
+      return path;
+    }
   }
 
   Future<void> loadLibrary(String path) async {
