@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -20,15 +22,29 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateMixin {
   late final TabController _tabs;
   bool _playerExpanded = false;
+  StreamSubscription<String>? _errorSub;
 
   @override
   void initState() {
     super.initState();
     _tabs = TabController(length: 5, vsync: this);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _errorSub = context.read<PlayerProvider>().errors.listen((msg) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(msg),
+            duration: const Duration(seconds: 3),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      });
+    });
   }
 
   @override
   void dispose() {
+    _errorSub?.cancel();
     _tabs.dispose();
     super.dispose();
   }
@@ -36,7 +52,6 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   @override
   Widget build(BuildContext context) {
     final library = context.watch<LibraryProvider>();
-    final hasTrack = context.select<PlayerProvider, bool>((p) => p.currentTrack != null);
 
     return Scaffold(
       appBar: AppBar(
@@ -67,16 +82,17 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
           ],
         ),
       ),
-      body: Stack(
-        children: [
-          _buildBody(library),
-          NowPlayingPanel(
-            isExpanded: _playerExpanded,
-            onToggle: () => setState(() => _playerExpanded = !_playerExpanded),
-          ),
-          if (hasTrack && _playerExpanded)
-            const ModalBarrier(dismissible: false, color: Colors.transparent),
-        ],
+      body: LayoutBuilder(
+        builder: (context, constraints) => Stack(
+          children: [
+            _buildBody(library),
+            NowPlayingPanel(
+              isExpanded: _playerExpanded,
+              availableHeight: constraints.maxHeight,
+              onToggle: () => setState(() => _playerExpanded = !_playerExpanded),
+            ),
+          ],
+        ),
       ),
     );
   }
