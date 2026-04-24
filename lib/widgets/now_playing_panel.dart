@@ -9,8 +9,14 @@ import 'album_art.dart';
 class NowPlayingPanel extends StatelessWidget {
   final bool isExpanded;
   final VoidCallback onToggle;
+  final double availableHeight;
 
-  const NowPlayingPanel({super.key, required this.isExpanded, required this.onToggle});
+  const NowPlayingPanel({
+    super.key,
+    required this.isExpanded,
+    required this.onToggle,
+    required this.availableHeight,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -18,7 +24,6 @@ class NowPlayingPanel extends StatelessWidget {
     final track = player.currentTrack;
     if (track == null) return const SizedBox.shrink();
 
-    final screenHeight = MediaQuery.of(context).size.height;
     final scheme = Theme.of(context).colorScheme;
 
     return Positioned(
@@ -28,7 +33,7 @@ class NowPlayingPanel extends StatelessWidget {
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 300),
         curve: Curves.easeInOut,
-        height: isExpanded ? screenHeight : 72,
+        height: isExpanded ? availableHeight : 72,
         child: Material(
           elevation: 16,
           color: scheme.surface,
@@ -113,107 +118,124 @@ class _FullPlayer extends StatelessWidget {
     final maxMs = dur.inMilliseconds > 0 ? dur.inMilliseconds.toDouble() : 1.0;
     final curMs = pos.inMilliseconds.clamp(0, dur.inMilliseconds).toDouble();
 
-    return SafeArea(
-      child: Column(
-        children: [
-          Align(
-            alignment: Alignment.centerLeft,
-            child: IconButton(
-              onPressed: onMinimize,
-              icon: const Icon(Icons.keyboard_arrow_down),
-              tooltip: 'Minimise',
-            ),
+    return Column(
+      children: [
+        Align(
+          alignment: Alignment.centerLeft,
+          child: IconButton(
+            onPressed: onMinimize,
+            icon: const Icon(Icons.keyboard_arrow_down),
+            tooltip: 'Minimise',
           ),
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 32),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  AlbumArt(data: track.albumArt, size: 240, borderRadius: 12),
-                  const SizedBox(height: 32),
-                  Text(track.title,
-                      style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
-                      textAlign: TextAlign.center,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis),
-                  const SizedBox(height: 6),
-                  Text('${track.artist} • ${track.album}',
-                      style: TextStyle(color: scheme.onSurfaceVariant),
-                      textAlign: TextAlign.center,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis),
-                  const SizedBox(height: 24),
+        ),
+        Expanded(
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              // Fixed height of all controls (title + artist + seek + transport + mode + spacing)
+              const fixedHeight = 306.0;
+              final artSize = (constraints.maxHeight - fixedHeight).clamp(0.0, 260.0);
 
-                  // Seek bar
-                  SliderTheme(
-                    data: SliderTheme.of(context).copyWith(trackHeight: 3, thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6)),
-                    child: Slider(
-                      value: curMs,
-                      max: maxMs,
-                      onChanged: (v) => player.seek(Duration(milliseconds: v.toInt())),
-                    ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 4),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              return SingleChildScrollView(
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 32),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Text(formatDuration(pos), style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant)),
-                        Text(formatDuration(dur), style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant)),
+                        if (artSize > 0) ...[
+                          SizedBox(
+                            height: artSize,
+                            child: AspectRatio(
+                              aspectRatio: 1,
+                              child: AlbumArt(data: track.albumArt, size: double.infinity, borderRadius: 12),
+                            ),
+                          ),
+                          const SizedBox(height: 20),
+                        ],
+                        Text(track.title,
+                            style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
+                            textAlign: TextAlign.center,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis),
+                        const SizedBox(height: 6),
+                        Text('${track.artist} • ${track.album}',
+                            style: TextStyle(color: scheme.onSurfaceVariant),
+                            textAlign: TextAlign.center,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis),
+                        const SizedBox(height: 16),
+
+                        SliderTheme(
+                          data: SliderTheme.of(context).copyWith(trackHeight: 3, thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6)),
+                          child: Slider(
+                            value: curMs,
+                            max: maxMs,
+                            onChanged: (v) => player.seek(Duration(milliseconds: v.toInt())),
+                          ),
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 4),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(formatDuration(pos), style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant)),
+                              Text(formatDuration(dur), style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant)),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                          children: [
+                            IconButton(onPressed: player.skipPrevious, icon: const Icon(Icons.skip_previous), iconSize: 36),
+                            IconButton(onPressed: player.seekBack, icon: const Icon(Icons.replay_10), iconSize: 36),
+                            Container(
+                              decoration: BoxDecoration(color: scheme.primary, shape: BoxShape.circle),
+                              child: IconButton(
+                                onPressed: player.playPause,
+                                icon: Icon(isPlaying ? Icons.pause : Icons.play_arrow, color: scheme.onPrimary),
+                                iconSize: 40,
+                                padding: const EdgeInsets.all(12),
+                              ),
+                            ),
+                            IconButton(onPressed: player.seekForward, icon: const Icon(Icons.forward_10), iconSize: 36),
+                            IconButton(onPressed: player.skipNext, icon: const Icon(Icons.skip_next), iconSize: 36),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            _ModeButton(
+                              icon: Icons.shuffle,
+                              active: player.mode == PlaybackMode.shuffle,
+                              tooltip: 'Shuffle',
+                              onTap: () => player.setMode(
+                                player.mode == PlaybackMode.shuffle ? PlaybackMode.regular : PlaybackMode.shuffle,
+                              ),
+                            ),
+                            const SizedBox(width: 24),
+                            _ModeButton(
+                              icon: _repeatIcon(player.mode),
+                              active: player.mode == PlaybackMode.repeatOne || player.mode == PlaybackMode.repeatAll,
+                              tooltip: _repeatLabel(player.mode),
+                              onTap: () => player.setMode(_nextRepeatMode(player.mode)),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 16),
                       ],
                     ),
                   ),
-                  const SizedBox(height: 16),
-
-                  // Transport controls
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                    children: [
-                      IconButton(onPressed: player.skipPrevious, icon: const Icon(Icons.skip_previous), iconSize: 36),
-                      IconButton(onPressed: player.seekBack, icon: const Icon(Icons.replay_10), iconSize: 36),
-                      Container(
-                        decoration: BoxDecoration(color: scheme.primary, shape: BoxShape.circle),
-                        child: IconButton(
-                          onPressed: player.playPause,
-                          icon: Icon(isPlaying ? Icons.pause : Icons.play_arrow, color: scheme.onPrimary),
-                          iconSize: 40,
-                          padding: const EdgeInsets.all(12),
-                        ),
-                      ),
-                      IconButton(onPressed: player.seekForward, icon: const Icon(Icons.forward_10), iconSize: 36),
-                      IconButton(onPressed: player.skipNext, icon: const Icon(Icons.skip_next), iconSize: 36),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-
-                  // Mode buttons
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      _ModeButton(
-                        icon: Icons.shuffle,
-                        active: player.mode == PlaybackMode.shuffle,
-                        tooltip: 'Shuffle',
-                        onTap: () => player.setMode(
-                          player.mode == PlaybackMode.shuffle ? PlaybackMode.regular : PlaybackMode.shuffle,
-                        ),
-                      ),
-                      const SizedBox(width: 24),
-                      _ModeButton(
-                        icon: _repeatIcon(player.mode),
-                        active: player.mode == PlaybackMode.repeatOne || player.mode == PlaybackMode.repeatAll,
-                        tooltip: _repeatLabel(player.mode),
-                        onTap: () => player.setMode(_nextRepeatMode(player.mode)),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
+                ),
+              );
+            },
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 

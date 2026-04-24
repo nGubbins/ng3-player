@@ -1,3 +1,5 @@
+import 'dart:async';
+import 'dart:io';
 import 'dart:math';
 
 import 'package:audioplayers/audioplayers.dart';
@@ -8,6 +10,9 @@ import '../models/track.dart';
 
 class PlayerProvider extends ChangeNotifier {
   final AudioPlayer _player = AudioPlayer();
+  final _errorController = StreamController<String>.broadcast();
+
+  Stream<String> get errors => _errorController.stream;
 
   List<Track> _queue = [];
   List<Track> _originalQueue = [];
@@ -60,7 +65,19 @@ class PlayerProvider extends ChangeNotifier {
     _position = Duration.zero;
     _duration = Duration.zero;
     notifyListeners();
-    await _player.play(DeviceFileSource(track.filePath));
+    if (!File(track.filePath).existsSync()) {
+      _errorController.add('File not found: "${track.title}"');
+      _isPlaying = false;
+      notifyListeners();
+      return;
+    }
+    try {
+      await _player.play(DeviceFileSource(track.filePath));
+    } catch (e) {
+      _errorController.add('Could not play "${track.title}"');
+      _isPlaying = false;
+      notifyListeners();
+    }
   }
 
   Future<void> playPause() async {
@@ -154,6 +171,7 @@ class PlayerProvider extends ChangeNotifier {
 
   @override
   void dispose() {
+    _errorController.close();
     _player.dispose();
     super.dispose();
   }
