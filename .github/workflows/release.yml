@@ -68,7 +68,7 @@ jobs:
       - name: Rename APK
         run: |
           VERSION="${{ github.ref_name }}"
-          cp build/app/outputs/flutter-apk/app-release.apk "ng3-${VERSION}.apk"
+          mv build/app/outputs/flutter-apk/app-release.apk "ng3-${VERSION}.apk"
           echo "APK_NAME=ng3-${VERSION}.apk" >> $GITHUB_ENV
 
       - name: Upload APK to GitHub Release
