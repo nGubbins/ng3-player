@@ -39,3 +39,39 @@ jobs:
         with:
           files: ${{ env.ZIP_NAME }}
           generate_release_notes: true
+
+  build-android:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Build release APK
+        run: flutter build apk --release
+
+      - name: Rename APK
+        run: |
+          VERSION="${{ github.ref_name }}"
+          cp build/app/outputs/flutter-apk/app-release.apk "ng3-${VERSION}.apk"
+          echo "APK_NAME=ng3-${VERSION}.apk" >> $GITHUB_ENV
+
+      - name: Upload APK to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ env.APK_NAME }}
