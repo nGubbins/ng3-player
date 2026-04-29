@@ -25,15 +25,16 @@ class NowPlayingPanel extends StatelessWidget {
     if (track == null) return const SizedBox.shrink();
 
     final scheme = Theme.of(context).colorScheme;
+    final bottomInset = MediaQuery.of(context).padding.bottom;
 
     return Positioned(
-      bottom: 0,
+      bottom: bottomInset,
       left: 0,
       right: 0,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 300),
         curve: Curves.easeInOut,
-        height: isExpanded ? availableHeight : 72,
+        height: isExpanded ? availableHeight - bottomInset : 72,
         child: Material(
           elevation: 16,
           color: scheme.surface,
